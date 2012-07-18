@@ -37,6 +37,11 @@ void set_image(char* image)
         imlib_context_set_image(new_image_unprepared);
         int src_width = imlib_image_get_width();
         int src_height = imlib_image_get_height();
+        if (src_width * src_height > 3172 * 3172)
+        {
+            imlib_free_image_and_decache();
+            return;
+        }
 
         int new_width, new_height;
         // Сначала растягиваем во весь экран
@@ -51,7 +56,7 @@ void set_image(char* image)
             new_width = (float)new_height / (float)src_height * (float)src_width;
         }
         // Но если растянули больше, чем в 2 раза, будет некрасиво, уменьшим обратно
-        if ((float)new_width / (float)new_height > 2.0)
+        if ((float)new_width / (float)src_width > 2.0)
         {
             new_width = src_width * 2;
             new_height = src_height * 2;
