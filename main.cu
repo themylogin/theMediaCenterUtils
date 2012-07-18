@@ -149,9 +149,9 @@ int main(int argc, char* argv[])
     
     pthread_t lastfm_thread;
     pthread_create(&lastfm_thread, NULL, lastfm_thread_body, (void*)&lastfm_thread_data);
-
+    
     // Memory
-    cudaMalloc((void**)&dev_im1data, screen->width * screen->height * sizeof(DATA32));
+    cudaMalloc((void**)&dev_im1data, 3172          * 3172           * sizeof(DATA32));
     cudaMalloc((void**)&dev_im2data, screen->width * screen->height * sizeof(DATA32));
     cudaMalloc((void**)&dev_im3data, screen->width * screen->height * sizeof(DATA32));
     for (int i = 0; i < 25; i++)
@@ -164,7 +164,7 @@ int main(int argc, char* argv[])
     default_image = imlib_load_image_immediately_without_cache("/home/themylogin/Wallpapers/01300_highwayatnightreload_1920x1080.jpg");
     imlib_context_set_image(default_image);
     cudaMemcpy(dev_im3data, imlib_image_get_data_for_reading_only(), imlib_image_get_width() * imlib_image_get_height() * sizeof(DATA32), cudaMemcpyHostToDevice);
-
+    
     // Main loop
     char current_artist[1024];
     while (1)
