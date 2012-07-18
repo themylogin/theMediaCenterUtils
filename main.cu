@@ -196,7 +196,7 @@ int main(int argc, char* argv[])
                     set_image(image);
                     free(image);
 
-                    for (int i = 0; i < 2; i++)
+                    for (int i = 0; i < 18; i++)
                     {
                         sleep(1);
 
@@ -213,7 +213,7 @@ int main(int argc, char* argv[])
 
                 if (!read_something)
                 {
-                    sleep(5);
+                    sleep(1);
                 }
                 rewinddir(dp);
                 goto startDir;
