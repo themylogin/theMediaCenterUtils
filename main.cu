@@ -22,7 +22,6 @@ DATA32* dev_im1data;
 DATA32* dev_im2data;
 DATA32* dev_im3data;
 
-Imlib_Image current_image;
 Imlib_Image default_image;
 
 DATA32* transitionImageData[25];
@@ -90,12 +89,7 @@ void set_image(char* image)
         cudaThreadSynchronize();
         cudaMemcpy(transitionImageData[i], dev_im2data, screen->width * screen->height * sizeof(DATA32), cudaMemcpyDeviceToHost);
     }
-
-    // В 3 перед началом следующего вызова будет текущее изображение
-    DATA32* tmp = dev_im3data;
-    dev_im3data = dev_im2data;
-    dev_im2data = tmp;
-
+    
     // Нарисуем переходы
     for (int i = 0; i < 25; i++)
     {
@@ -105,6 +99,19 @@ void set_image(char* image)
         XClearWindow(display, root);
         XUngrabServer(display);
         XFlush(display);
+    }
+
+    // В 3 перед началом следующего вызова будет текущее изображение
+    DATA32* tmp = dev_im3data;
+    dev_im3data = dev_im2data;
+    dev_im2data = tmp;
+
+    // Освободим память
+    if (new_image != default_image)
+    {
+        imlib_context_set_image(new_image);
+        free(imlib_image_get_data_for_reading_only());
+        imlib_free_image_and_decache();
     }
 }
 
@@ -155,7 +162,6 @@ int main(int argc, char* argv[])
 
     // Images
     default_image = imlib_load_image_immediately_without_cache("/home/themylogin/Wallpapers/01300_highwayatnightreload_1920x1080.jpg");
-    current_image = default_image;
     imlib_context_set_image(default_image);
     cudaMemcpy(dev_im3data, imlib_image_get_data_for_reading_only(), imlib_image_get_width() * imlib_image_get_height() * sizeof(DATA32), cudaMemcpyHostToDevice);
 
