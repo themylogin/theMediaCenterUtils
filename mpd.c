@@ -49,13 +49,20 @@ void* mpd_thread_body(void* _data)
                 mpd_response_next(conn);
                 if ((song = mpd_recv_song(conn)) != NULL)
                 {
-                    const char *value;
-                    if ((value = mpd_song_get_tag(song, MPD_TAG_ARTIST, 0)) != NULL)
+                    const char* artist;
+                    if ((artist = mpd_song_get_tag(song, MPD_TAG_ARTIST, 0)) != NULL)
                     {
-                        // Узнали имя исполнителя. Отлично
+                        // Узнали имя исполнителя. Отлично. Теперь узнаем трек.
+                        const char* track;
+                        if ((track = mpd_song_get_tag(song, MPD_TAG_TITLE, 0)) == NULL)
+                        {
+                            track = ""; // Ничего страшного, просто останемся без текста песни
+                        }
+
                         pthread_mutex_lock(&data->mutex);
                         data->is_playing = 1;
-                        strcpy(data->now_playing_artist, value);
+                        strcpy(data->now_playing_artist, artist);
+                        strcpy(data->now_playing_track, track);
                         pthread_mutex_unlock(&data->mutex);
                     }
                     else

@@ -1,4 +1,5 @@
 #include <dirent.h>
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -26,6 +27,9 @@ Imlib_Image default_image;
 
 DATA32* transitionImageData[25];
 Imlib_Image transitionImage[25];
+
+Imlib_Font font;
+Imlib_Image lyrics_image = NULL;
 
 void set_image(char* image)
 {
@@ -94,7 +98,20 @@ void set_image(char* image)
         cudaThreadSynchronize();
         cudaMemcpy(transitionImageData[i], dev_im2data, screen->width * screen->height * sizeof(DATA32), cudaMemcpyDeviceToHost);
     }
-    
+
+    // Напишем на них на всех текст песни
+    if (lyrics_image != NULL)
+    {
+        imlib_context_set_image(lyrics_image);
+        int lyrics_width = imlib_image_get_width();
+        int lyrics_height = imlib_image_get_height();
+        for (int i = 0; i < 25; i++)
+        {
+            imlib_context_set_image(transitionImage[i]);
+            imlib_blend_image_onto_image(lyrics_image, true, 0, 0, lyrics_width, lyrics_height, screen->width - lyrics_width, 0, lyrics_width, lyrics_height);
+        }
+    }
+
     // Нарисуем переходы
     for (int i = 0; i < 25; i++)
     {
@@ -120,6 +137,58 @@ void set_image(char* image)
     }
 }
 
+Imlib_Image draw_lyrics(char lyrics[][54], int lines)
+{
+    int margin = 36;
+
+    imlib_context_set_font(font);
+
+    int column_width = 0;
+    int column_height = 0;
+    for (int i = 0; i < lines; i++)
+    {
+        int text_w, text_h;        
+        imlib_get_text_size(lyrics[i], &text_w, &text_h);
+        if (text_w > column_width)
+        {
+            column_width = text_w;
+        }
+        column_height += text_h;
+    }
+    int column_count = ceil((float) column_height / (screen->height - 2 * margin));
+
+    Imlib_Image im = imlib_create_image(margin + (column_width + margin) * column_count, screen->height);
+    imlib_context_set_image(im);
+    imlib_image_set_has_alpha(true);
+    imlib_context_set_color(0, 0, 0, 0);
+    imlib_image_fill_rectangle(0, 0, margin + (column_width + margin) * column_count, screen->height);
+
+    imlib_context_set_color(255, 255, 255, 255);
+    int x = margin, y = margin;
+    bool column_begin = true;
+    for (int i = 0; i < lines; i++)
+    {
+        if (column_begin && !strcmp(lyrics[i], ""))
+        {
+            continue;
+        }
+
+        column_begin = false;
+        int width_return, height_return, horizontal_advance_return, vertical_advance_return;
+        imlib_text_draw_with_return_metrics(x, y, lyrics[i], &width_return, &height_return, &horizontal_advance_return, &vertical_advance_return);
+
+        y += height_return;
+        if (y > screen->height - margin)
+        {
+            x += column_width + margin;
+            y = margin;
+            column_begin = true;
+        }
+    }
+
+    return im;
+}
+
 int main(int argc, char* argv[])
 {
     // CUDA
@@ -135,6 +204,9 @@ int main(int argc, char* argv[])
     imlib_context_set_display(display);
     imlib_context_set_drawable(pixmap);
     imlib_context_set_visual(DefaultVisual(display, DefaultScreen(display)));
+
+    imlib_add_path_to_font_path("/usr/share/fonts/TTF");
+    font = imlib_load_font("calibrib/18");
 
     // MPD
     mpd_thread_data_t mpd_thread_data;
@@ -172,6 +244,9 @@ int main(int argc, char* argv[])
     
     // Main loop
     char current_artist[1024];
+    char current_lyrics[1024][54];
+    int current_lyrics_lines;    
+    char current_lyrics_filename[1024]; strcpy(current_lyrics_filename, "");
     while (1)
     {
         pthread_mutex_lock(&mpd_thread_data.mutex);
@@ -211,6 +286,71 @@ int main(int argc, char* argv[])
                         {
                             pthread_mutex_unlock(&mpd_thread_data.mutex);
                             goto closeDir;
+                        }
+                        // Тексты песен
+                        char nowplaying_lyrics_filename[1024];
+                        sprintf(nowplaying_lyrics_filename, "%s/.lyrics/%s-%s.txt", getenv("HOME"), mpd_thread_data.now_playing_artist, mpd_thread_data.now_playing_track);
+                        if (strcmp(current_lyrics_filename, nowplaying_lyrics_filename))
+                        {
+                            FILE* lyrics_fh = fopen(nowplaying_lyrics_filename, "r");
+                            if (lyrics_fh)
+                            {
+                                current_lyrics_lines = 0;
+                                int next_line_offset = 0;
+                                while (!feof(lyrics_fh))
+                                {
+                                    fgets(current_lyrics[current_lyrics_lines] + next_line_offset, 54 - next_line_offset, lyrics_fh);
+                                    if (current_lyrics[current_lyrics_lines][strlen(current_lyrics[current_lyrics_lines]) - 1] != '\n' && !feof(lyrics_fh))
+                                    {
+                                        // Строка разорвалась не по своей воле
+                                        int pos;
+                                        for (pos = strlen(current_lyrics[current_lyrics_lines]) - 1; pos > 0; pos--)
+                                        {
+                                            if (current_lyrics[current_lyrics_lines][pos] == ' ')
+                                            {
+                                                break;
+                                            }
+                                        }
+                                        if (pos != 0)
+                                        {
+                                            strcpy(current_lyrics[current_lyrics_lines + 1], current_lyrics[current_lyrics_lines] + pos + 1);
+                                            next_line_offset = strlen(current_lyrics[current_lyrics_lines + 1]);
+                                            current_lyrics[current_lyrics_lines][pos] = '\0';
+                                        }
+                                        else
+                                        {
+                                            next_line_offset = 0;
+                                        }
+                                    }
+                                    else
+                                    {
+                                        current_lyrics[current_lyrics_lines][strlen(current_lyrics[current_lyrics_lines]) - 1] = '\0';
+                                        next_line_offset = 0;
+                                    }
+
+                                    current_lyrics_lines++;
+                                }
+                                fclose(lyrics_fh);
+                                if (next_line_offset)
+                                {
+                                    current_lyrics_lines++;
+                                }
+
+                                if (lyrics_image != NULL)
+                                {
+                                    imlib_context_set_image(lyrics_image);
+                                    imlib_free_image_and_decache();
+                                }
+                                char lyrics_image_filename[1024];
+                                sprintf(lyrics_image_filename, "/home/themylogin/theMediaCenter/MpdWallpaperChanger/lyrics/%s-%s.png", mpd_thread_data.now_playing_artist, mpd_thread_data.now_playing_track);
+                                if ((lyrics_image = imlib_load_image_immediately_without_cache(lyrics_image_filename)) == NULL)
+                                {
+                                    lyrics_image = draw_lyrics(current_lyrics, current_lyrics_lines);
+                                    imlib_context_set_image(lyrics_image);
+                                    imlib_save_image(lyrics_image_filename);
+                                }
+                                strcpy(current_lyrics_filename, nowplaying_lyrics_filename);
+                            }
                         }
                         pthread_mutex_unlock(&mpd_thread_data.mutex);
                     }
