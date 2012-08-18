@@ -15,8 +15,10 @@ __global__ void mixImages(DATA32* im1data, DATA32* im2data, float k, DATA32* dst
 
 __global__ void padImage(DATA32* src, int srcW, int srcH, DATA32* dst, int dstW, int dstH)
 {
-    int xStart = (dstW - srcW) / 2;
-    int xEnd = xStart + srcW;
+    // int xStart = (dstW - srcW) / 2;
+    // int xEnd = xStart + srcW;
+    int xStart = 0;
+    int xEnd = srcW;
 
     int yStart = (dstH - srcH) / 2;
     int yEnd = yStart + srcH;
